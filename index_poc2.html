@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Prueba de Concepto - Clasificador Estrellas</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f9f9f9;
+      color: #333;
+    }
+
+    header {
+      background: linear-gradient(90deg, #36d1dc, #5b86e5);
+      padding: 1rem 2rem;
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    header img {
+      height: 40px;
+    }
+
+    main {
+      padding: 2rem;
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h1 {
+      font-size: 2rem;
+      color: #333;
+    }
+
+    .upload-section {
+      margin-top: 2rem;
+      border: 2px dashed #ccc;
+      padding: 2rem;
+      text-align: center;
+      background: white;
+      border-radius: 10px;
+    }
+
+    video, canvas, img {
+      max-width: 100%;
+      margin-top: 1rem;
+    }
+
+    .description-box {
+      background: #e6f7ff;
+      padding: 1rem;
+      margin-top: 1rem;
+      border-left: 4px solid #1890ff;
+      border-radius: 6px;
+    }
+
+    button {
+      margin-top: 1rem;
+      padding: 0.7rem 1.5rem;
+      background-color: #5b86e5;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #4a76d0;
+    }
+
+    input[type="file"] {
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="https://estrellas.app/wp-content/uploads/2025/03/e-horizontal-gradient.png" alt="Estrellas Logo">
+    <h1>Clasificador de Contenido - Prueba de Concepto</h1>
+  </header>
+
+  <main>
+    <p><strong>Objetivo:</strong> Esta prueba de concepto permite subir videos o imágenes y obtener automáticamente una descripción del contenido visual usando IA. Ayuda a validar si el contenido es adecuado para la plataforma Estrellas.</p>
+
+    <div class="upload-section">
+      <h2>Sube un video o una imagen</h2>
+      <input type="file" id="fileInput" accept="video/*,image/*" />
+      <video id="video" width="400" controls style="display:none;"></video>
+      <img id="previewImage" style="display:none;" />
+      <canvas id="canvas" style="display:none;"></canvas>
+      <button onclick="analizarContenido()">Analizar contenido</button>
+    </div>
+
+    <div id="descripcion" class="description-box" style="display:none;">
+      <strong>Descripción generada por IA:</strong>
+      <ul id="descripcionLista"></ul>
+    </div>
+  </main>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const descripcion = document.getElementById("descripcion");
+    const descripcionLista = document.getElementById("descripcionLista");
+    const previewImage = document.getElementById("previewImage");
+
+    fileInput.addEventListener("change", function () {
+      const file = this.files[0];
+      const url = URL.createObjectURL(file);
+
+      if (file.type.startsWith("video/")) {
+        video.src = url;
+        video.style.display = "block";
+        previewImage.style.display = "none";
+      } else if (file.type.startsWith("image/")) {
+        previewImage.src = url;
+        previewImage.style.display = "block";
+        video.style.display = "none";
+      }
+    });
+
+    async function analizarContenido() {
+      const file = fileInput.files[0];
+      const context = canvas.getContext("2d");
+
+      descripcionLista.innerHTML = '';
+      descripcion.style.display = "block";
+
+      if (file.type.startsWith("image/")) {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        await img.decode();
+        canvas.width = img.width;
+        canvas.height = img.height;
+        context.drawImage(img, 0, 0);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg"));
+        await enviarABlip(blob);
+      } else if (file.type.startsWith("video/")) {
+        const frames = [1, 3, 5]; // segundos
+        for (let i = 0; i < frames.length; i++) {
+          await extraerYAnalizarFrame(frames[i]);
+        }
+      }
+    }
+
+    function extraerYAnalizarFrame(segundo) {
+      return new Promise(resolve => {
+        video.currentTime = segundo;
+        video.onseeked = async () => {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+          const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg"));
+          await enviarABlip(blob);
+          resolve();
+        };
+      });
+    }
+
+    async function enviarABlip(blob) {
+      const response = await fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer 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",
+          "Content-Type": "application/octet-stream"
+        },
+        body: blob
+      });
+
+      const data = await response.json();
+      const texto = data[0]?.generated_text || "Descripción no disponible.";
+      const li = document.createElement("li");
+      li.textContent = texto;
+      descripcionLista.appendChild(li);
+    }
+  </script>
+</body>
+</html>

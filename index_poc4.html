@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Estrellas – Análisis de Video Automatizado</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: #f9f9f9;
+      color: #333;
+    }
+
+    header {
+      background: linear-gradient(to right, #fbc2eb, #a6c1ee);
+      padding: 20px;
+      text-align: center;
+    }
+
+    header img {
+      max-width: 300px;
+      margin-bottom: 20px;
+    }
+
+    header h1 {
+      font-size: 2.5rem;
+      margin: 0;
+    }
+
+    header p {
+      font-size: 1rem;
+      max-width: 800px;
+      margin: 10px auto;
+    }
+
+    .contenedor {
+      padding: 20px;
+      max-width: 800px;
+      margin: auto;
+    }
+
+    .modulo-validacion {
+      font-size: 1.2rem;
+      margin: 20px 0;
+      padding: 15px;
+      border-radius: 10px;
+      background: #f0f0f0;
+      text-align: center;
+    }
+
+    #video, #previewImage {
+      width: 100%;
+      max-height: 400px;
+      display: none;
+      margin: 20px 0;
+    }
+
+    canvas {
+      display: none;
+    }
+
+    ul {
+      list-style: disc;
+      padding-left: 20px;
+    }
+
+    footer {
+      margin-top: 50px;
+      text-align: center;
+      padding: 20px;
+      background-color: #eee;
+      font-size: 0.9rem;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #6c63ff;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 6px;
+      text-decoration: none;
+      margin-top: 10px;
+    }
+
+    .btn:hover {
+      background: #574fd6;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <img src="https://www.estrellas.app/wp-content/uploads/2025/03/e-horizontal-gradient.png" alt="Logo Estrellas">
+  <h1>Automatización Inteligente de Revisión de Contenido</h1>
+  <p>El proceso de revisión de videos suele ser manual, costoso y poco eficiente. En Estrellas, hemos implementado una solución basada en inteligencia artificial utilizando el modelo BLIP de Hugging Face, que permite describir y analizar automáticamente el contenido visual mediante la extracción de fotogramas clave (frames). Este enfoque no solo mejora la precisión, sino que reduce los tiempos de revisión drásticamente.</p>
+</header>
+
+<div class="contenedor">
+  <h2>Sube tu video o imagen</h2>
+  <input type="file" id="fileInput" accept="video/*,image/*">
+  <video id="video" controls></video>
+  <img id="previewImage" alt="Vista previa">
+  <canvas id="canvas"></canvas>
+
+  <div class="modulo-validacion" id="moduloValidacion">🔍 Esperando análisis...</div>
+
+  <button class="btn" onclick="analizarContenido()">Analizar contenido</button>
+
+  <div id="descripcion" style="display:none;">
+    <h3>Descripción generada por IA:</h3>
+    <ul id="descripcionLista"></ul>
+  </div>
+</div>
+
+<footer>
+  Contacto: Cristobal Valencia – Celular: 3005412940
+</footer>
+
+<script>
+  const fileInput = document.getElementById("fileInput");
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  const descripcion = document.getElementById("descripcion");
+  const descripcionLista = document.getElementById("descripcionLista");
+  const previewImage = document.getElementById("previewImage");
+  const moduloValidacion = document.getElementById("moduloValidacion");
+
+  const frasesPermitidas = [
+    "una mujer hablando", "personas en una reunión", "una entrevista",
+    "una escena tranquila", "una mujer sonriendo", "gente colaborando"
+  ];
+
+  fileInput.addEventListener("change", function () {
+    const file = this.files[0];
+    const url = URL.createObjectURL(file);
+
+    descripcionLista.innerHTML = '';
+    moduloValidacion.innerHTML = "🔍 Esperando análisis...";
+    descripcion.style.display = "none";
+
+    if (file.type.startsWith("video/")) {
+      video.src = url;
+      video.style.display = "block";
+      previewImage.style.display = "none";
+    } else if (file.type.startsWith("image/")) {
+      previewImage.src = url;
+      previewImage.style.display = "block";
+      video.style.display = "none";
+    }
+  });
+
+  async function analizarContenido() {
+    const file = fileInput.files[0];
+    const context = canvas.getContext("2d");
+    descripcionLista.innerHTML = '';
+    descripcion.style.display = "block";
+
+    if (file.type.startsWith("image/")) {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await img.decode();
+      canvas.width = img.width;
+      canvas.height = img.height;
+      context.drawImage(img, 0, 0);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg"));
+      await enviarABlip(blob);
+    } else if (file.type.startsWith("video/")) {
+      const frames = [1, 2, 3, 4, 5, 6];
+      for (let i = 0; i < frames.length; i++) {
+        await extraerYAnalizarFrame(frames[i]);
+      }
+    }
+  }
+
+  function extraerYAnalizarFrame(segundo) {
+    return new Promise(resolve => {
+      video.currentTime = segundo;
+      video.onseeked = async () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg"));
+        await enviarABlip(blob);
+        resolve();
+      };
+    });
+  }
+
+  async function enviarABlip(blob) {
+    const response = await fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer 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",
+        "Content-Type": "application/octet-stream"
+      },
+      body: blob
+    });
+
+    const data = await response.json();
+    const texto = data[0]?.generated_text || "Descripción no disponible.";
+    const li = document.createElement("li");
+    li.textContent = texto;
+    descripcionLista.appendChild(li);
+
+    validarContenido(texto);
+  }
+
+  function validarContenido(texto) {
+    const esPermitido = frasesPermitidas.some(frase => texto.toLowerCase().includes(frase));
+    if (esPermitido) {
+      moduloValidacion.innerHTML = "✅ Video permitido. Contenido aceptable.";
+      moduloValidacion.style.backgroundColor = "#d4edda";
+    } else {
+      moduloValidacion.innerHTML = "❌ Video no permitido. Revisión necesaria.";
+      moduloValidacion.style.backgroundColor = "#f8d7da";
+    }
+  }
+</script>
+
+</body>
+</html>
